@@ -35,6 +35,7 @@ static char const * str_time(double seconds)
 }
 
 static double soxi_total;
+static sox_format_t * in, * out;
 
 enum user_actions { half_sec, whole_sec, quit };
 static int main_menu()
@@ -55,7 +56,6 @@ static int main_menu()
  */
 int main(int argc, char * argv[])
 {
-  static sox_format_t * in, * out; /* input and output files */
   int sox_result, action, done = 0;
   sox_effects_chain_t * chain;
   sox_effect_t * e;
