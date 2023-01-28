@@ -15,4 +15,7 @@ typedef char * * tc_comments_t;
 #endif /* PRIu64 */
 
 #define SOX_LIB_ERROR 399
+#define SILENCE_DURATION "0.1"
+#define SILENCE_THRESHOLD ".3%"
+
 void show_stats(sox_format_t * in);
