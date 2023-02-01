@@ -13,6 +13,16 @@
 #include <stdio.h>
 #include <assert.h>
 
+typedef struct {
+  double          window;
+  double          window_current;
+  double          window_end;
+  size_t          window_size;
+  double          rms_sum;
+  double          rms_threshold;
+  double          max_rms_sum;
+} priv_t;
+
 static void report_error(int errcode, int line_number, int sox_error) {
   printf("ERROR %d at line %d in source file %s\n ", errcode, line_number, __FILE__);
   printf("Error Number: %d\n ", errcode);
@@ -39,6 +49,40 @@ static char const * str_time(double seconds)
 static double soxi_total;
 static sox_format_t * in, * out;
 static double find_target();
+static void run_customized_effect(void);
+static sox_bool is_louder(sox_effect_t const * effp,
+                          sox_sample_t value /* >= 0 */,
+                          double threshold,
+                          int unit);
+
+static void clear_rms(sox_effect_t * effp)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+
+  memset(&checker->window, 0,
+         checker->window_size * sizeof(double));
+
+  checker->window_current = checker->window;
+  checker->window_end = checker->window + checker->window_size;
+  checker->rms_sum = 0;
+  checker->max_rms_sum = 0;
+  /* For testing, default threshold is 85% */
+  checker->rms_threshold = 85;
+}
+
+static sox_sample_t compute_rms(sox_effect_t * effp, sox_sample_t sample)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+  double new_sum;
+  sox_sample_t rms;
+
+  new_sum = checker->rms_sum;
+  new_sum -= checker->window_current;
+  new_sum += ((double)sample * (double)sample);
+
+  rms = sqrt(new_sum / checker->window_size);
+  return (rms);
+}
 
 static TCHAR home_directory[MAX_PATH];
 
@@ -65,6 +109,117 @@ static int main_menu()
   return a;
 }
 
+static int output_handler_start(sox_effect_t * effp)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+  printf("start: window=%g\nwindow_current=%g\nwindow_end=%g\n"
+            "window_size=%" PRIuPTR "\nrms_sum=%g\n",
+    checker->window, checker->window_current,
+    checker->window_end, checker->window_size,
+    checker->rms_sum
+  );
+  clear_rms(effp);
+  return SOX_SUCCESS;
+}
+
+/* COPIED FROM example1.c ... */
+/* The function that will be called to input samples into the effects chain.
+ * In this example, we get samples to process from a SoX-openned audio file.
+ * In a different application, they might be generated or come from a different
+ * part of the application. */
+static int input_drain(
+    sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+
+  /* ensure that *osamp is a multiple of the number of channels. */
+  *osamp -= *osamp % effp->out_signal.channels;
+
+  /* Read up to *osamp samples into obuf; store the actual number read
+   * back to *osamp */
+  *osamp = sox_read(in, obuf, *osamp);
+
+  /* sox_read may return a number that is less than was requested; only if
+   * 0 samples is returned does it indicate that end-of-file has been reached
+   * or an error has occurred */
+  if (!*osamp && in->sox_errno)
+    fprintf(stderr, "%s: %s\n", in->filename, in->sox_errstr);
+  return *osamp? SOX_SUCCESS : SOX_EOF;
+}
+
+/* COPIED FROM example1.c ... */
+/* The function that will be called to output samples from the effects chain.
+ * The samples will be analyzed. */
+static int output_flow(sox_effect_t *effp, sox_sample_t const * ibuf,
+    sox_sample_t * obuf, size_t * isamp, size_t * osamp)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+  /* len is total samples, chcnt counts channels */
+  int len = 0;
+  sox_sample_t t_ibuf;
+  size_t chcnt;
+
+  len = ((*isamp > *osamp) ? *osamp : *isamp);
+  *isamp = 0;
+
+  for(; len ; len--)
+  {
+    t_ibuf = *ibuf;
+    for (chcnt = 0; chcnt < effp->in_signal.channels; chcnt++)
+    {
+      /* THIS IS OUR TEST */
+      if ((checker->max_rms_sum == 0) || (is_louder(effp, compute_rms(effp, ibuf[chcnt]), checker->max_rms_sum, '%') == sox_true))
+      {
+        checker->max_rms_sum = compute_rms(effp, ibuf[chcnt]);
+      }
+    }
+    *isamp += 1;
+    ibuf++;
+  }
+
+  /* Outputting is the last `effect' in the effect chain so always passes
+   * 0 samples on to the next effect (as there isn't one!) */
+  *osamp = 0;
+  return SOX_SUCCESS; /* All samples analyzed successfully */
+}
+
+static int output_stop(sox_effect_t * effp)
+{
+  priv_t * checker = (priv_t *) effp->priv;
+
+  printf("stop: window=%g\nwindow_current=%g\nwindow_end=%g\n"
+            "window_size=%" PRIuPTR "\nrms_sum=%g\n",
+    checker->window, checker->window_current,
+    checker->window_end, checker->window_size,
+    checker->rms_sum
+  );
+
+  printf("Highest peak: %g\n", checker->max_rms_sum);
+  return (SOX_SUCCESS);
+}
+
+/* COPIED FROM example1.c ... */
+/* A `stub' effect handler to handle inputting samples to the effects
+ * chain; the only function needed for this example is `drain' */
+static sox_effect_handler_t const * input_handler(void)
+{
+  static sox_effect_handler_t handler = {
+    "input", NULL, SOX_EFF_MCHAN, NULL, NULL, NULL, input_drain, NULL, NULL, sizeof(priv_t)
+  };
+  return &handler;
+}
+
+/* COPIED FROM example1.c ... */
+/* A `stub' effect handler to handle outputting samples from the effects
+ * chain; the only function needed for this example is `flow' */
+static sox_effect_handler_t const * output_handler(void)
+{
+  static sox_effect_handler_t handler = {
+    "output", NULL, SOX_EFF_MCHAN, NULL, output_handler_start, output_flow, NULL, output_stop, NULL, sizeof(priv_t)
+  };
+  return &handler;
+}
+
 /*
  * Adapted from example0.c in the libsox package
  */
@@ -88,58 +243,12 @@ int main(int argc, char * argv[])
     exit(EXIT_FAILURE);
   }
 
-  system("cls");
+  /* system("cls"); */
   GetCurrentDirectory(MAX_PATH, home_directory);
   SetCurrentDirectory(argv[1]);
 
-  double total_duration = find_target();
-  if (total_duration == 0)
-  {
-    cleanup();
-    exit(EXIT_FAILURE);
-  }
+  run_customized_effect();
 
-  out = sox_open_write("result.wav", &in->signal, NULL, NULL, NULL, NULL);
-  if (out == NULL)
-  {
-    report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-    cleanup();
-    exit(EXIT_FAILURE);
-  }
-  chain = sox_create_effects_chain(&in->encoding, &out->encoding);
-
-  /* The first effect in the effect chain must be something that can source
-   * samples; in this case, we use the built-in handler that inputs data
-   * from an audio file */
-  e = sox_create_effect(sox_find_effect("input"));
-  args[0] = (char *)in, sox_effect_options(e, 1, args);
-  
-  /* This becomes the first 'effect' in the chain */
-  sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
-  if (sox_result != SOX_SUCCESS)
-  {
-    report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-    cleanup();
-    exit(EXIT_FAILURE);
-  }
-  free(e);
-
-  /* The last effect in the effect chain must be something that only consumes
-   * samples. We will use the built-in handler that outputs data to
-   * an audio file. */
-  e = sox_create_effect(sox_find_effect("output"));
-  args[0] = (char *)out, sox_effect_options(e, 1, args);
-
-  sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
-  if (sox_result != SOX_SUCCESS)
-  {
-    report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-    cleanup();
-    exit(EXIT_FAILURE);
-  }
-  free(e);
-
-  printf("Total duration: %s\n", str_time(total_duration));
   do {
     action = main_menu();
     switch ( action ) {
@@ -168,8 +277,6 @@ void show_stats(sox_format_t * in)
   ws = in->signal.length / max(in->signal.channels, 1);
   secs = (double)ws / max(in->signal.rate, 1);
 
-  /* Clear the screen */
-  printf("\e[1;1H\e[2J");
   printf("TYPE: %s\nRATE (samples per second): %g\nCHANNELS: %u\n"\
             "SAMPLES: %" PRIu64 "\n"\
             "DURATION: %s\nDURATION (in seconds): %f\n"\
@@ -205,12 +312,12 @@ static double find_target()
   if((hFind = FindFirstFile("*.wav", &fdFile)) == INVALID_HANDLE_VALUE)
   {
     printf("No files found.");
-    return 0; 
+    return 0;
   }
 
   do
   {
-    /* FindFirstFile will always return "." and ".." 
+    /* FindFirstFile will always return "." and ".."
      * as the first two directories.*/
     if(strcmp(fdFile.cFileName, ".") != 0
       && strcmp(fdFile.cFileName, "..") != 0)
@@ -270,16 +377,16 @@ static double find_target()
        */
       ws = temp_file->signal.length / max(temp_file->signal.channels, 1);
       secs_after_trimming = (double)ws / max(temp_file->signal.rate, 1);
-      if ((secs - secs_after_trimming) > max_silence) 
-      { 
-        max_silence = secs_after_trimming; 
+      if ((secs - secs_after_trimming) > max_silence)
+      {
+        max_silence = secs_after_trimming;
         target_file_name = fdFile.cFileName;
       }
       sox_close(temp_file);
       system("del reverse.wav");
       sox_close(in);
     }
-    if ( target_file_name == NULL ) 
+    if ( target_file_name == NULL )
     {
       report_error(ENOENT, __LINE__, 0);
       return 0;
@@ -291,4 +398,82 @@ static double find_target()
 
   in = sox_open_read(target_file_name, NULL, NULL, NULL);
   return total_duration;
+}
+
+static void run_customized_effect(void)
+{
+  WIN32_FIND_DATA fdFile;
+  HANDLE hFind = NULL;
+  unsigned long sample_count = 0L;
+  sox_effects_chain_t * chain;
+  sox_effect_t * e;
+  int sox_result = SOX_SUCCESS;
+
+  if((hFind = FindFirstFile("*.wav", &fdFile)) == INVALID_HANDLE_VALUE)
+  {
+    printf("No files found.\n");
+    return;
+  }
+
+  do
+  {
+    /* FindFirstFile will always return "." and ".."
+     * as the first two directories.*/
+    if(strcmp(fdFile.cFileName, ".") != 0
+      && strcmp(fdFile.cFileName, "..") != 0)
+    {
+      in = sox_open_read(fdFile.cFileName, NULL, NULL, NULL);
+      if (in == NULL)
+      {
+        report_error(errno, __LINE__, 0);
+        break;
+      }
+      show_stats(in);
+      chain = sox_create_effects_chain(&in->encoding, &in->encoding);
+      e = sox_create_effect(input_handler());
+      sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
+      if (sox_result != SOX_SUCCESS)
+      {
+        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
+        break;
+      }
+      free(e);
+      e = sox_create_effect(output_handler());
+      sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
+      if (sox_result != SOX_SUCCESS)
+      {
+        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
+        break;
+      }
+      free(e);
+
+      /* Flow samples through the effects processing chain until EOF is reached */
+      sox_flow_effects(chain, NULL, NULL);
+      sox_delete_effects_chain(chain);
+      sox_close(in);
+    }
+  }
+  while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
+
+  FindClose(hFind); /* Always clean up! */
+}
+
+static sox_bool is_louder(sox_effect_t const * effp,
+                          sox_sample_t value /* >= 0 */,
+                          double threshold,
+                          int unit)
+{
+  sox_sample_t masked_value;
+  /* When scaling low bit data, noise values got scaled way up */
+  /* Only consider the original bits when looking for silence */
+  masked_value = value & (-1 << (32 - effp->in_signal.precision));
+
+  double scaled_value = (double)masked_value / SOX_SAMPLE_MAX;
+
+  if(unit == '%')
+    scaled_value *= 100;
+  else if (unit == 'd')
+    scaled_value = linear_to_dB(scaled_value);
+
+  return scaled_value > threshold;
 }
