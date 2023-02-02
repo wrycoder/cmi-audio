@@ -425,7 +425,8 @@ static void run_customized_effect(void)
     /* FindFirstFile will always return "." and ".."
      * as the first two directories.*/
     if(strcmp(fdFile.cFileName, ".") != 0
-      && strcmp(fdFile.cFileName, "..") != 0)
+      && strcmp(fdFile.cFileName, "..") != 0
+      && strcmp(fdFile.cFileName, "temp.wav") != 0)
     {
       in = sox_open_read(fdFile.cFileName, NULL, NULL, NULL);
       if (in == NULL)
