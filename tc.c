@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <windows.h>
 #include <string.h>
+#include <strsafe.h>
 #include <stdio.h>
 #include <assert.h>
 
@@ -35,14 +36,16 @@ static void report_error(int errcode, int line_number, int sox_error) {
 
 static char const * str_time(double seconds)
 {
-  static char string[16][50];
+  static TCHAR string[16][50];
+  size_t cchDest = 50;
   static int i;
+  LPCTSTR pszFormat = TEXT("%02i:%02i:%05.2f");
   int hours, mins = seconds / 60;
   seconds -= mins * 60;
   hours = mins / 60;
   mins -= hours * 60;
   i = (i+1) & 15;
-  sprintf(string[i], "%02i:%02i:%05.2f", hours, mins, seconds);
+  StringCchPrintf(string[i], cchDest, pszFormat, hours, mins, seconds);
   return string[i];
 }
 
@@ -404,10 +407,12 @@ static void run_customized_effect(void)
 {
   WIN32_FIND_DATA fdFile;
   HANDLE hFind = NULL;
+  TCHAR szNewPath[MAX_PATH];
   unsigned long sample_count = 0L;
   sox_effects_chain_t * chain;
   sox_effect_t * e;
   int sox_result = SOX_SUCCESS;
+  char * args[10];
 
   if((hFind = FindFirstFile("*.wav", &fdFile)) == INVALID_HANDLE_VALUE)
   {
