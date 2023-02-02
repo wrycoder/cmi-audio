@@ -435,28 +435,49 @@ static void run_customized_effect(void)
         break;
       }
       show_stats(in);
-      chain = sox_create_effects_chain(&in->encoding, &in->encoding);
-      e = sox_create_effect(input_handler());
+      out = sox_open_write("temp.wav", &in->signal, NULL, NULL, NULL, NULL);
+      if (out == NULL)
+      {
+        report_error(errno, __LINE__, 0);
+        break;
+      }
+      chain = sox_create_effects_chain(&in->encoding, &out->encoding);
+      e = sox_create_effect(sox_find_effect("input"));
+      args[0] = (char *)in, assert(sox_effect_options(e, 1, args) == SOX_SUCCESS);
+      assert(sox_add_effect(chain, e, &in->signal, &in->signal) == SOX_SUCCESS);
+      free(e);
+      e = sox_create_effect(sox_find_effect("reverse"));
+      assert(sox_add_effect(chain, e, &in->signal, &in->signal) == SOX_SUCCESS);
+      free(e);
+      e = sox_create_effect(sox_find_effect("silence"));
+      args[0] = "1";
+      args[1] = "00:00:00.2";
+      args[2] = "0.03%";
+      assert(sox_effect_options(e, 3, args) == SOX_SUCCESS);
       sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
       if (sox_result != SOX_SUCCESS)
       {
         report_error(SOX_LIB_ERROR, __LINE__, sox_result);
+        cleanup();
         break;
       }
       free(e);
-      e = sox_create_effect(output_handler());
-      sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
-      if (sox_result != SOX_SUCCESS)
-      {
-        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-        break;
-      }
+      e = sox_create_effect(sox_find_effect("reverse"));
+      assert(sox_add_effect(chain, e, &in->signal, &in->signal) == SOX_SUCCESS);
+      free(e);
+      e = sox_create_effect(sox_find_effect("output"));
+      args[0] = (char *)out, assert(sox_effect_options(e, 1, args) == SOX_SUCCESS);
+      assert(sox_add_effect(chain, e, &in->signal, &in->signal) == SOX_SUCCESS);
       free(e);
 
       /* Flow samples through the effects processing chain until EOF is reached */
       sox_flow_effects(chain, NULL, NULL);
       sox_delete_effects_chain(chain);
       sox_close(in);
+      sox_close(out);
+      StringCchPrintf(szNewPath, sizeof(szNewPath)/sizeof(szNewPath[0]), TEXT("%s"), fdFile.cFileName);
+      CopyFile("temp.wav", szNewPath, FALSE);
+      system("del temp.wav");
     }
   }
   while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
