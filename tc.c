@@ -230,10 +230,17 @@ int main(int argc, char * argv[])
   int sox_result, action, done = 0;
   sox_effects_chain_t * chain;
   sox_effect_t * e;
+  TCHAR threshold[15];
+  LPCTSTR pszThresholdFormat = TEXT("%s%%");
   char * args[10];
 
-  if (argc < 2) {
-    printf("Please specify a target directory.");
+  if (argc < 3) {
+    printf( "USAGE: tc [directory] [threshold]\n\n"
+            " -directory  = the folder containing file(s) you want to trim.\n"
+            " -threshold  = the minimum percentage of sound you want to keep.\n"
+            "               Any trailing silence quieter than this will be discarded.\n"
+            "               The %% sign is not required, but you MUST include\n"
+            "               a decimal point and at least one digit after it.\n");
     exit(EXIT_SUCCESS);
   }
 
