@@ -372,6 +372,9 @@ static void trim_silence(char * threshold)
       /* Flow samples through the effects processing chain until EOF is reached */
       sox_flow_effects(chain, NULL, NULL);
       sox_delete_effects_chain(chain);
+      sox_close(out);
+      out = sox_open_read("temp.wav", NULL, NULL, NULL);
+      total_duration_after += duration_in_seconds(out);
       sox_close(in);
       sox_close(out);
       StringCchPrintf(szNewPath, sizeof(szNewPath)/sizeof(szNewPath[0]), TEXT("%s"), fdFile.cFileName);
