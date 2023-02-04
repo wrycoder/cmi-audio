@@ -331,7 +331,9 @@ static void trim_silence(char * threshold)
         report_error(errno, __LINE__, 0);
         break;
       }
+      printf("FILE: %s....\n", fdFile.cFileName);
       show_stats(in);
+      total_duration_before += duration_in_seconds(in);
       out = sox_open_write("temp.wav", &in->signal, NULL, NULL, NULL, NULL);
       if (out == NULL)
       {
@@ -349,7 +351,7 @@ static void trim_silence(char * threshold)
       e = sox_create_effect(sox_find_effect("silence"));
       args[0] = "1";
       args[1] = "00:00:00.2";
-      args[2] = "0.03%";
+      args[2] = threshold;
       assert(sox_effect_options(e, 3, args) == SOX_SUCCESS);
       sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
       if (sox_result != SOX_SUCCESS)
