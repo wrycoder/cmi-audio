@@ -384,6 +384,11 @@ static void trim_silence(char * threshold)
   }
   while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
 
+  printf( "RESULTS...\n"
+          "Total duration: %s\n"
+          "Silence removed: %s\n",
+          str_time(total_duration_after), str_time(total_duration_before - total_duration_after));
+
   FindClose(hFind); /* Always clean up! */
 }
 
