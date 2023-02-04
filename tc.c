@@ -299,116 +299,13 @@ void show_stats(sox_format_t * in)
 
 }
 
-static double find_target()
-{
-  WIN32_FIND_DATA fdFile;
-  HANDLE hFind = NULL;
-  double secs, secs_after_trimming, total_duration = 0;
-  uint64_t ws;
-  int sox_result, max_silence = 0;
-  sox_effects_chain_t * chain;
-  sox_effect_t * e;
-  sox_format_t * temp_file;
-  char * target_file_name = NULL;
-  char * args[10];
-
-  if((hFind = FindFirstFile("*.wav", &fdFile)) == INVALID_HANDLE_VALUE)
-  {
-    printf("No files found.");
-    return 0;
-  }
-
-  do
-  {
-    /* FindFirstFile will always return "." and ".."
-     * as the first two directories.*/
-    if(strcmp(fdFile.cFileName, ".") != 0
-      && strcmp(fdFile.cFileName, "..") != 0)
-    {
-      /* Open the input file (with default parameters) */
-      in = sox_open_read(fdFile.cFileName, NULL, NULL, NULL);
-      if (in == NULL)
-      {
-        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-        FindClose(hFind);
-        return 0;
-      }
-      /* For testing... */
-      show_stats(in);
-      /* Get total duration of current audio file. */
-      ws = in->signal.length / max(in->signal.channels, 1);
-      secs = (double)ws / max(in->signal.rate, 1);
-      total_duration += secs;
-
-      /* Use the 'reverse' effect to get trailing silence of current audio file. */
-      temp_file = sox_open_write("reverse.wav", &in->signal, NULL, NULL, NULL, NULL);
-      if (temp_file == NULL)
-      {
-        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-        FindClose(hFind);
-        return 0;
-      }
-      chain = sox_create_effects_chain(&in->encoding, &temp_file->encoding);
-      e = sox_create_effect(sox_find_effect("reverse"));
-      args[0] = (char *)in, sox_effect_options(e, 0, args);
-      sox_result = sox_add_effect(chain, e, &in->signal, &in->signal);
-      if (sox_result != SOX_SUCCESS)
-      {
-        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-        sox_close(temp_file);
-        FindClose(hFind);
-        return 0;
-      }
-      free(e);
-      e = sox_create_effect(sox_find_effect("silence"));
-      args[0] = "1";
-      args[1] = SILENCE_DURATION;
-      args[2] = SILENCE_THRESHOLD;
-      sox_effect_options(e, 3, args);
-      sox_result = sox_add_effect(chain, e, &temp_file->signal, &temp_file->signal);
-      if (sox_result != SOX_SUCCESS)
-      {
-        report_error(SOX_LIB_ERROR, __LINE__, sox_result);
-        sox_close(temp_file);
-        FindClose(hFind);
-        return 0;
-      }
-      free(e);
-
-      /* Is it longer than max_silence? Then update that value,
-       * and assign name of the audio file to *target_file_name.
-       */
-      ws = temp_file->signal.length / max(temp_file->signal.channels, 1);
-      secs_after_trimming = (double)ws / max(temp_file->signal.rate, 1);
-      if ((secs - secs_after_trimming) > max_silence)
-      {
-        max_silence = secs_after_trimming;
-        target_file_name = fdFile.cFileName;
-      }
-      sox_close(temp_file);
-      system("del reverse.wav");
-      sox_close(in);
-    }
-    if ( target_file_name == NULL )
-    {
-      report_error(ENOENT, __LINE__, 0);
-      return 0;
-    }
-  }
-  while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
-
-  FindClose(hFind); /* Always clean up! */
-
-  in = sox_open_read(target_file_name, NULL, NULL, NULL);
-  return total_duration;
-}
-
-static void run_customized_effect(void)
+static void trim_silence(char * threshold)
 {
   WIN32_FIND_DATA fdFile;
   HANDLE hFind = NULL;
   TCHAR szNewPath[MAX_PATH];
   unsigned long sample_count = 0L;
+  double total_duration_before = 0, total_duration_after = 0;
   sox_effects_chain_t * chain;
   sox_effect_t * e;
   int sox_result = SOX_SUCCESS;
