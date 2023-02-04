@@ -283,14 +283,13 @@ void show_stats(sox_format_t * in)
 
   printf("TYPE: %s\nRATE (samples per second): %g\nCHANNELS: %u\n"\
             "SAMPLES: %" PRIu64 "\n"\
-            "DURATION: %s\nDURATION (in seconds): %f\n"\
+            "DURATION: %s\n"\
             "BITS PER SAMPLE: %u\nPRECISION: %u\n",
           in->filetype,
           in->signal.rate,
           in->signal.channels,
           ws,
           str_time(secs),
-          secs,
           in->encoding.bits_per_sample,
           in->signal.precision);
   if (in->oob.comments) {
