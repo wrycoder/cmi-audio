@@ -255,26 +255,21 @@ int main(int argc, char * argv[])
   /* system("cls"); */
   GetCurrentDirectory(MAX_PATH, home_directory);
   SetCurrentDirectory(argv[1]);
-
-  run_customized_effect();
-
-  do {
-    action = main_menu();
-    switch ( action ) {
-      case quit:
-        done = 1;
-        break;
-      case half_sec:
-        break;
-      case whole_sec:
-        break;
-    }
-    if (done == 1) break;
-
-  } while (done == 0);
-
+  StringCchPrintf(threshold, 15, pszThresholdFormat, argv[2]);
+  trim_silence(threshold);
   cleanup();
   return 0;
+}
+
+double duration_in_seconds(sox_format_t * source)
+{
+  double secs;
+  uint64_t ws;
+
+  ws = source->signal.length / max(source->signal.channels, 1);
+  secs = (double)ws / max(source->signal.rate, 1);
+
+  return secs;
 }
 
 void show_stats(sox_format_t * in)
