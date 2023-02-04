@@ -51,8 +51,7 @@ static char const * str_time(double seconds)
 
 static double soxi_total;
 static sox_format_t * in, * out;
-static double find_target();
-static void run_customized_effect(void);
+static void trim_silence(char *);
 static sox_bool is_louder(sox_effect_t const * effp,
                           sox_sample_t value /* >= 0 */,
                           double threshold,
