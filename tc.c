@@ -39,19 +39,26 @@ static char const * str_time(double seconds)
   static TCHAR string[16][50];
   size_t cchDest = 50;
   static int i;
-  LPCTSTR pszFormat = TEXT("%02i:%02i:%05.2f");
+  LPCTSTR pszFormatWithHours = TEXT("%02i:%02i:%05.2f");
+  LPCTSTR pszFormat = TEXT("%02i:%05.2f");
   int hours, mins = seconds / 60;
   seconds -= mins * 60;
   hours = mins / 60;
   mins -= hours * 60;
   i = (i+1) & 15;
-  StringCchPrintf(string[i], cchDest, pszFormat, hours, mins, seconds);
+  if (hours > 0)
+  {
+    StringCchPrintf(string[i], cchDest, pszFormatWithHours, hours, mins, seconds);
+  } else {
+    StringCchPrintf(string[i], cchDest, pszFormat, mins, seconds);
+  }
   return string[i];
 }
 
 static double soxi_total;
 static sox_format_t * in, * out;
 static void trim_silence(char *);
+static void show_timings();
 static sox_bool is_louder(sox_effect_t const * effp,
                           sox_sample_t value /* >= 0 */,
                           double threshold,
