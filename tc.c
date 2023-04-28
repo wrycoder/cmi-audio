@@ -264,6 +264,7 @@ int main(int argc, char * argv[])
   SetCurrentDirectory(argv[1]);
   StringCchPrintf(threshold, 15, pszThresholdFormat, argv[2]);
   trim_silence(threshold);
+  show_timings();
   cleanup();
   return 0;
 }
@@ -396,6 +397,44 @@ static void trim_silence(char * threshold)
           "Silence removed: %s\n",
           str_time(total_duration_after), str_time(total_duration_before - total_duration_after));
 
+  FindClose(hFind); /* Always clean up! */
+}
+
+static void show_timings()
+{
+  WIN32_FIND_DATA fdFile;
+  HANDLE hFind = NULL;
+  TCHAR szNewPath[MAX_PATH];
+  unsigned long sample_count = 0L;
+  double duration = 0;
+  sox_effects_chain_t * chain;
+  int sox_result = SOX_SUCCESS;
+  if((hFind = FindFirstFile("*.wav", &fdFile)) == INVALID_HANDLE_VALUE)
+  {
+    printf("No files found.\n");
+    return;
+  }
+  do {
+    /* FindFirstFile will always return "." and ".."
+     * as the first two directories.*/
+    if(strcmp(fdFile.cFileName, ".") != 0
+      && strcmp(fdFile.cFileName, "..") != 0
+      && strcmp(fdFile.cFileName, "temp.wav") != 0)
+    {
+      in = sox_open_read(fdFile.cFileName, NULL, NULL, NULL);
+      if (in == NULL)
+      {
+        report_error(errno, __LINE__, 0);
+        break;
+      }
+      printf("FILE: %s ...  RUNTIME: %s\n",
+        in->filename,
+        str_time(duration_in_seconds(in))
+      );
+      sox_close(in);
+    }
+  }
+  while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
   FindClose(hFind); /* Always clean up! */
 }
 
