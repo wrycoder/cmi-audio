@@ -59,6 +59,7 @@ static double soxi_total;
 static sox_format_t * in, * out;
 static void trim_silence(char *);
 static void show_timings();
+void show_name_and_runtime(sox_format_t * in);
 static sox_bool is_louder(sox_effect_t const * effp,
                           sox_sample_t value /* >= 0 */,
                           double threshold,
@@ -280,6 +281,18 @@ double duration_in_seconds(sox_format_t * source)
   return secs;
 }
 
+void show_name_and_runtime(sox_format_t * in)
+{
+  double secs;
+  uint64_t ws;
+  char const * text = NULL;
+
+  ws = in->signal.length / max(in->signal.channels, 1);
+  secs = (double)ws / max(in->signal.rate, 1);
+
+  printf("FILE: %s ... DURATION: %s\n", in->filename, str_time(secs));
+}
+
 void show_stats(sox_format_t * in)
 {
   double secs;
@@ -339,8 +352,7 @@ static void trim_silence(char * threshold)
         report_error(errno, __LINE__, 0);
         break;
       }
-      printf("FILE: %s....\n", fdFile.cFileName);
-      show_stats(in);
+      show_name_and_runtime(in);
       total_duration_before += duration_in_seconds(in);
       out = sox_open_write("temp.wav", &in->signal, NULL, NULL, NULL, NULL);
       if (out == NULL)
@@ -427,10 +439,7 @@ static void show_timings()
         report_error(errno, __LINE__, 0);
         break;
       }
-      printf("FILE: %s ...  RUNTIME: %s\n",
-        in->filename,
-        str_time(duration_in_seconds(in))
-      );
+      show_name_and_runtime(in);
       sox_close(in);
     }
   }
