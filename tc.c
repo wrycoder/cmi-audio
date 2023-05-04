@@ -204,7 +204,7 @@ void show_name_and_runtime(sox_format_t * in)
   ws = in->signal.length / max(in->signal.channels, 1);
   secs = (double)ws / max(in->signal.rate, 1);
 
-  printf("FILE: %s ... DURATION: %s\n", in->filename, str_time(secs));
+  printf_s("FILE: %s: \t\t\t%-15.15s\n", in->filename, str_time(secs));
 }
 
 void show_stats(sox_format_t * in)
