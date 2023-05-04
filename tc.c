@@ -99,10 +99,35 @@ static TCHAR home_directory[MAX_PATH];
 /* All done; tidy up: */
 static void cleanup()
 {
+  STRSAFE_LPSTR sox_wildcard = "libSoX.tmp*"; 
+  const int temp_path_length = MAX_PATH + strlen(sox_wildcard) + 1;
+  TCHAR szTempFileWildcard[temp_path_length];
+  TCHAR szCurrentTempFileName[temp_path_length];
+  WIN32_FIND_DATA fdFile;
+  HANDLE hFind = NULL;
+
   if (in != NULL) sox_close(in);
   if (out != NULL) sox_close(out);
-  SetCurrentDirectory(home_directory);
   sox_quit();
+  GetTempPathA(MAX_PATH, szTempFileWildcard);
+  StringCbCatA(szTempFileWildcard, temp_path_length, sox_wildcard); 
+  if((hFind = FindFirstFile(szTempFileWildcard, &fdFile)) != INVALID_HANDLE_VALUE)
+  {
+    do
+    {
+      /* FindFirstFile will always return "." and ".."
+      * as the first two directories.*/
+      if(strcmp(fdFile.cFileName, ".") != 0
+        && strcmp(fdFile.cFileName, "..") != 0)
+      {
+        GetTempPathA(MAX_PATH, szCurrentTempFileName);
+        StringCbCatA(szCurrentTempFileName, temp_path_length, fdFile.cFileName);
+        DeleteFileA(szCurrentTempFileName);
+      }
+    }
+    while(FindNextFile(hFind, &fdFile)); /* Find the next file. */
+  }
+  SetCurrentDirectory(home_directory);
 }
 
 enum user_actions { half_sec, whole_sec, quit };
