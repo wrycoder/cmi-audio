@@ -199,7 +199,6 @@ void show_name_and_runtime(sox_format_t * in)
 {
   double secs;
   uint64_t ws;
-  char const * text = NULL;
 
   ws = in->signal.length / max(in->signal.channels, 1);
   secs = (double)ws / max(in->signal.rate, 1);
@@ -211,7 +210,6 @@ void show_stats(sox_format_t * in)
 {
   double secs;
   uint64_t ws;
-  char const * text = NULL;
 
   ws = in->signal.length / max(in->signal.channels, 1);
   secs = (double)ws / max(in->signal.rate, 1);
